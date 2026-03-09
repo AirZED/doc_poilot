@@ -1,0 +1,33 @@
+# DocPilot — GitLab CI Auto-documentation
+# Add this to your .gitlab-ci.yml or include it as a separate file.
+
+docpilot-update-docs:
+  stage: docs
+  image: node:20-alpine
+  rules:
+    # Only run on default branch pipelines triggered by a merge request merge
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"'
+  before_script:
+    - npm install -g docpilot
+    - mkdir -p .docpilot
+    - echo "OPENAI_API_KEY=${OPENAI_API_KEY}" > .docpilot/.env
+    - echo "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}" >> .docpilot/.env
+    - echo "GEMINI_API_KEY=${GEMINI_API_KEY}" >> .docpilot/.env
+    # Configure git for committing
+    - git config user.email "docpilot-bot@gitlab.com"
+    - git config user.name "DocPilot Bot"
+    - git remote set-url origin "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
+  script:
+    - docpilot generate --since HEAD~1
+    - |
+      if git diff --quiet; then
+        echo "✅ Documentation is already up to date."
+      else
+        git add -A
+        git commit -m "docs: auto-update documentation [docpilot] [skip ci]"
+        git push origin HEAD:$CI_DEFAULT_BRANCH
+        echo "✅ Documentation updated and pushed."
+      fi
+  variables:
+    GIT_DEPTH: "2"
+  # Set OPENAI_API_KEY or ANTHROPIC_API_KEY in GitLab CI/CD → Settings → Variables

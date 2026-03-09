@@ -1,0 +1,53 @@
+{
+  "name": "docpilot",
+  "version": "0.1.0",
+  "description": "Continuous Documentation Maintainer — automatically keeps your docs in sync with your codebase on every PR merge.",
+  "keywords": [
+    "documentation",
+    "cli",
+    "ai",
+    "rag",
+    "devtools",
+    "openai",
+    "github-actions"
+  ],
+  "author": "",
+  "license": "MIT",
+  "bin": {
+    "docpilot": "./dist/bin/docpilot.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "src/templates"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "ts-node bin/docpilot.ts",
+    "lint": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.20.0",
+    "@google/generative-ai": "^0.24.1",
+    "chalk": "^5.3.0",
+    "commander": "^12.0.0",
+    "dotenv": "^16.4.0",
+    "glob": "^10.3.0",
+    "inquirer": "^9.2.0",
+    "openai": "^4.28.0",
+    "ora": "^8.0.0",
+    "simple-git": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/inquirer": "^9.0.7",
+    "@types/node": "^20.11.0",
+    "ts-node": "^10.9.2",
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0"
+  }
+}

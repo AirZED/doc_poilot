@@ -1,0 +1,64 @@
+name: DocPilot — Auto-update Documentation
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+      - master
+
+jobs:
+  update-docs:
+    # Only run when a PR is actually merged (not just closed)
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2 # Need previous commit for diff
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install DocPilot
+        run: npm install -g docpilot
+
+      - name: Run DocPilot — generate docs
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          # Copy the API key into .docpilot/.env so DocPilot can find it
+          mkdir -p .docpilot
+          echo "OPENAI_API_KEY=${OPENAI_API_KEY}" > .docpilot/.env
+          echo "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}" >> .docpilot/.env
+          echo "GEMINI_API_KEY=${GEMINI_API_KEY}" >> .docpilot/.env
+          docpilot generate --since HEAD~1
+
+      - name: Check for doc changes
+        id: changes
+        run: |
+          git diff --quiet && echo "changed=false" >> "$GITHUB_OUTPUT" || echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and push documentation updates
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git config user.name "DocPilot Bot"
+          git config user.email "docpilot-bot@users.noreply.github.com"
+          git add -A
+          git commit -m "docs: auto-update documentation [docpilot]
+
+          Updated by DocPilot after merging PR #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}"
+          git push
+
+      - name: No doc changes detected
+        if: steps.changes.outputs.changed == 'false'
+        run: echo "✅ Documentation is already up to date."
