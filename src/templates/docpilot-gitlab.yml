@@ -5,8 +5,8 @@ docpilot-update-docs:
   stage: docs
   image: node:20-alpine
   rules:
-    # Only run on default branch pipelines triggered by a merge request merge
-    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"'
+    # Run on default branch every time code is pushed or merged
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
   before_script:
     - npm install -g docpilot
     - mkdir -p .docpilot

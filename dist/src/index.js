@@ -84,23 +84,42 @@ function parseHunks(diffText) {
 }
 async function getChangedFiles(repoPath, since = "HEAD~1") {
   const git = (0, import_simple_git.default)(repoPath);
-  const diffText = await git.diff([since, "HEAD"]);
-  const parsed = parseHunks(diffText);
-  const IGNORED = [
-    "package-lock.json",
-    "yarn.lock",
-    "pnpm-lock.yaml",
-    ".docpilot/"
-  ];
-  return parsed.filter(
-    (h) => !IGNORED.some((ignored) => h.filePath.includes(ignored))
-  ).map((h) => ({
-    filePath: h.filePath,
-    language: detectLanguage(h.filePath),
-    additions: h.additions,
-    deletions: h.deletions,
-    rawHunk: h.rawHunk
-  }));
+  try {
+    const log = await git.log().catch(() => null);
+    if (!log || log.total === 0) {
+      return [];
+    }
+    if (since === "HEAD~1" && log.total === 1) {
+      const emptyTreeHash = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+      const diffText2 = await git.diff([emptyTreeHash, "HEAD"]);
+      return parseHunks(diffText2).map((h) => ({
+        filePath: h.filePath,
+        language: detectLanguage(h.filePath),
+        additions: h.additions,
+        deletions: h.deletions,
+        rawHunk: h.rawHunk
+      }));
+    }
+    const diffText = await git.diff([since, "HEAD"]);
+    const parsed = parseHunks(diffText);
+    const IGNORED = [
+      "package-lock.json",
+      "yarn.lock",
+      "pnpm-lock.yaml",
+      ".docpilot/"
+    ];
+    return parsed.filter(
+      (h) => !IGNORED.some((ignored) => h.filePath.includes(ignored))
+    ).map((h) => ({
+      filePath: h.filePath,
+      language: detectLanguage(h.filePath),
+      additions: h.additions,
+      deletions: h.deletions,
+      rawHunk: h.rawHunk
+    }));
+  } catch (err) {
+    return [];
+  }
 }
 
 // src/core/chunker.ts
