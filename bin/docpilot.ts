@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import { Command } from 'commander';
 import { runInit } from '../src/commands/init';
 import { runGenerate } from '../src/commands/generate';
