@@ -120,123 +120,141 @@ export async function runGenerate(options: GenerateOptions): Promise<void> {
 
     spinner.succeed('Config loaded');
 
-    // 1. Get changed files
-    spinner.start('Analysing git diff...');
-    const since = options.since ?? 'HEAD~1';
-    const diffHunks = await getChangedFiles(process.cwd(), since);
+    try {
+        // 1. Get changed files
+        spinner.start('Analysing git diff...');
+        const since = options.since ?? 'HEAD~1';
+        const diffHunks = await getChangedFiles(process.cwd(), since);
 
-    if (diffHunks.length === 0) {
-        spinner.info('No code changes detected. Documentation is up to date.');
-        return;
-    }
-    spinner.succeed(`Found ${diffHunks.length} changed file(s)`);
-
-    // 2. Build chunks
-    spinner.start('Chunking changed code (RAG)...');
-    const chunks = buildChunksFromDiff(diffHunks);
-    spinner.succeed(`Built ${chunks.length} semantic chunk(s)`);
-
-    // 3. Embed chunks
-    spinner.start('Embedding chunks...');
-    const embeddedChunks = [...chunks];
-    for (const chunk of embeddedChunks) {
-        chunk.embedding = await adapter.embed(chunk.content);
-    }
-    spinner.succeed('Chunks embedded');
-
-    // 4. Process each target
-    const allUpdates: import('../types/index.js').DocUpdate[] = [];
-    const totalTokenUsage: { input: number; output: number } = { input: 0, output: 0 };
-
-    for (const docType of config.docTypes) {
-        for (const target of config.targets) {
-            spinner.start(
-                `Generating ${chalk.cyan(docType)} docs for ${chalk.yellow(target.path)}...`
-            );
-
-            // Build query from doc type to fetch relevant chunks
-            const queryText = `${docType} documentation for ${target.type}`;
-            const queryEmbedding = await adapter.embed(queryText);
-            const retrieved = retrieveTopK(queryEmbedding, embeddedChunks, 5);
-
-            const existingDoc = loadExistingDoc(target);
-
-            const { systemPrompt, userPrompt } = buildPrompt({
-                docType,
-                framework: config.detectedFramework,
-                retrievedChunks: retrieved,
-                diffHunks,
-                existingDocContent: existingDoc,
-                targetType: target.type,
-            });
-
-            const llmResponse = await adapter.complete({ systemPrompt, userPrompt });
-            totalTokenUsage.input += llmResponse.inputTokens;
-            totalTokenUsage.output += llmResponse.outputTokens;
-
-            const docUpdate = await patchDocFile(
-                target,
-                llmResponse.content,
-                options.dryRun
-            );
-            allUpdates.push(docUpdate);
-
-            const sections = docUpdate.patchedSections.join(', ') || 'no sections detected';
-            spinner.succeed(
-                `${chalk.cyan(docType)} → ${chalk.yellow(target.path)} (sections: ${sections})`
-            );
+        if (diffHunks.length === 0) {
+            spinner.info('No code changes detected. Documentation is up to date.');
+            return;
         }
-    }
+        spinner.succeed(`Found ${diffHunks.length} changed file(s)`);
 
-    // GitBook summary update
-    if (config.format === 'gitbook') {
-        spinner.start('Updating GitBook SUMMARY.md...');
-        updateSummaryFile(config.targets);
-        spinner.succeed('SUMMARY.md updated');
-    }
+        // 2. Build chunks
+        spinner.start('Chunking changed code (RAG)...');
+        const chunks = buildChunksFromDiff(diffHunks);
+        spinner.succeed(`Built ${chunks.length} semantic chunk(s)`);
 
-    // 5. Report
-    const estimatedCost = estimateCost(
-        config.llm.model,
-        totalTokenUsage.input,
-        totalTokenUsage.output
-    );
+        // 3. Embed chunks
+        spinner.start('Embedding chunks...');
+        const embeddedChunks = [...chunks];
+        for (const chunk of embeddedChunks) {
+            chunk.embedding = await adapter.embed(chunk.content);
+        }
+        spinner.succeed('Chunks embedded');
 
-    const tokenUsage: TokenUsage = {
-        inputTokens: totalTokenUsage.input,
-        outputTokens: totalTokenUsage.output,
-        estimatedCostUsd: estimatedCost,
-    };
+        // 4. Process each target
+        const allUpdates: import('../types/index.js').DocUpdate[] = [];
+        const totalTokenUsage: { input: number; output: number } = { input: 0, output: 0 };
 
-    const result: GenerateResult = {
-        docUpdates: allUpdates,
-        tokenUsage,
-        dryRun: options.dryRun,
-    };
+        for (const docType of config.docTypes) {
+            for (const target of config.targets) {
+                spinner.start(
+                    `Generating ${chalk.cyan(docType)} docs for ${chalk.yellow(target.path)}...`
+                );
 
-    console.log(chalk.bold('\n📊 Token Usage Report'));
-    console.log(`  Input tokens:  ${chalk.cyan(result.tokenUsage.inputTokens)}`);
-    console.log(`  Output tokens: ${chalk.cyan(result.tokenUsage.outputTokens)}`);
-    console.log(
-        `  Estimated cost: ${chalk.green(`$${result.tokenUsage.estimatedCostUsd.toFixed(5)}`)}`
-    );
+                // Build query from doc type to fetch relevant chunks
+                const queryText = `${docType} documentation for ${target.type}`;
+                const queryEmbedding = await adapter.embed(queryText);
+                const retrieved = retrieveTopK(queryEmbedding, embeddedChunks, 5);
 
-    if (options.dryRun) {
-        console.log(
-            chalk.yellow(
-                '\n⚠️  Dry run — no files were written. Remove --dry-run to apply changes.'
-            )
+                const existingDoc = loadExistingDoc(target);
+
+                const { systemPrompt, userPrompt } = buildPrompt({
+                    docType,
+                    framework: config.detectedFramework,
+                    retrievedChunks: retrieved,
+                    diffHunks,
+                    existingDocContent: existingDoc,
+                    targetType: target.type,
+                });
+
+                const llmResponse = await adapter.complete({ systemPrompt, userPrompt });
+                totalTokenUsage.input += llmResponse.inputTokens;
+                totalTokenUsage.output += llmResponse.outputTokens;
+
+                const docUpdate = await patchDocFile(
+                    target,
+                    llmResponse.content,
+                    options.dryRun
+                );
+                allUpdates.push(docUpdate);
+
+                const sections = docUpdate.patchedSections.join(', ') || 'no sections detected';
+                spinner.succeed(
+                    `${chalk.cyan(docType)} → ${chalk.yellow(target.path)} (sections: ${sections})`
+                );
+            }
+        }
+
+        // GitBook summary update
+        if (config.format === 'gitbook') {
+            spinner.start('Updating GitBook SUMMARY.md...');
+            updateSummaryFile(config.targets);
+            spinner.succeed('SUMMARY.md updated');
+        }
+
+        // 5. Report
+        const estimatedCost = estimateCost(
+            config.llm.model,
+            totalTokenUsage.input,
+            totalTokenUsage.output
         );
-    } else {
-        // Update lastRun in config
-        const updatedConfig: DocpilotConfig = {
-            ...config,
-            lastRun: new Date().toISOString(),
+
+        const tokenUsage: TokenUsage = {
+            inputTokens: totalTokenUsage.input,
+            outputTokens: totalTokenUsage.output,
+            estimatedCostUsd: estimatedCost,
         };
-        fs.writeFileSync(
-            path.join(process.cwd(), '.docpilot', 'config.json'),
-            JSON.stringify(updatedConfig, null, 2)
+
+        const result: GenerateResult = {
+            docUpdates: allUpdates,
+            tokenUsage,
+            dryRun: options.dryRun,
+        };
+
+        console.log(chalk.bold('\n📊 Token Usage Report'));
+        console.log(`  Input tokens:  ${chalk.cyan(result.tokenUsage.inputTokens)}`);
+        console.log(`  Output tokens: ${chalk.cyan(result.tokenUsage.outputTokens)}`);
+        console.log(
+            `  Estimated cost: ${chalk.green(`$${result.tokenUsage.estimatedCostUsd.toFixed(5)}`)}`
         );
-        console.log(chalk.bold.green('\n✅ Documentation updated successfully!\n'));
+
+        if (options.dryRun) {
+            console.log(
+                chalk.yellow(
+                    '\n⚠️  Dry run — no files were written. Remove --dry-run to apply changes.'
+                )
+            );
+        } else {
+            // Update lastRun in config
+            const updatedConfig: DocpilotConfig = {
+                ...config,
+                lastRun: new Date().toISOString(),
+            };
+            fs.writeFileSync(
+                path.join(process.cwd(), '.docpilot', 'config.json'),
+                JSON.stringify(updatedConfig, null, 2)
+            );
+            console.log(chalk.bold.green('\n✅ Documentation updated successfully!\n'));
+        }
+    } catch (err) {
+        spinner.fail('An error occurred during generation:');
+        if (err instanceof Error) {
+            console.error(chalk.red(`  ${err.name}: ${err.message}`));
+            if (err.stack) {
+                console.error(chalk.dim(err.stack));
+            }
+            // Log additional info if it's an OpenAI error
+            if ('status' in err || 'code' in err) {
+                console.error(chalk.yellow('\nAdditional Error Context:'));
+                console.error(JSON.stringify(err, null, 2));
+            }
+        } else {
+            console.error(chalk.red(String(err)));
+        }
+        process.exit(1);
     }
 }
