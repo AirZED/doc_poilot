@@ -27,6 +27,7 @@
   },
   "scripts": {
     "build": "tsup",
+    "prepare": "npm run build",
     "dev": "ts-node bin/docpilot.ts",
     "lint": "tsc --noEmit",
     "clean": "rm -rf dist"
