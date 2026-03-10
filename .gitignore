@@ -1,2 +1,5 @@
 # DocPilot
 .docpilot/.env
+node_modules/
+dist/
+doc-test/
