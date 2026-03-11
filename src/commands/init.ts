@@ -251,11 +251,8 @@ export async function runInit(): Promise<void> {
         chalk.bold(`\n🔑 Enter your ${apiKeyEnvVar} (stored in .docpilot/.env, gitignored): `)
     );
 
-    // 4. CI platform
-    const ci = await askChoice<CIPlatform>(
-        chalk.bold('\n⚙️  Set up CI/CD integration?'),
-        ['github', 'gitlab', 'none']
-    );
+    // 4. Set CI platform to none by default (manual updates preferred)
+    const ci: CIPlatform = 'none';
 
     // Build config
     const config: DocpilotConfig = {
@@ -283,7 +280,7 @@ export async function runInit(): Promise<void> {
     writeGitignore();
     console.log(`  ✓ .gitignore updated`);
 
-    copyCITemplate(ci);
+    // CI template copying removed – manual mode is now default
 
     console.log(
         chalk.bold.green(

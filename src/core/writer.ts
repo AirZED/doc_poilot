@@ -23,19 +23,36 @@ export async function patchDocFile(
         originalContent = fs.readFileSync(absolutePath, 'utf-8');
     }
 
-    const patchedSections = findChangedSections(originalContent, updatedContent);
+    const cleanedContent = cleanLLMResponse(updatedContent);
+    const patchedSections = findChangedSections(originalContent, cleanedContent);
 
     if (!dryRun) {
         fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
-        fs.writeFileSync(absolutePath, updatedContent, 'utf-8');
+        fs.writeFileSync(absolutePath, cleanedContent, 'utf-8');
     }
 
     return {
         targetPath: targetFile.path,
         originalContent,
-        updatedContent,
+        updatedContent: cleanedContent,
         patchedSections,
     };
+}
+
+/**
+ * Strips markdown code blocks (```markdown ... ```) if the entire response
+ * is wrapped in them.
+ */
+function cleanLLMResponse(content: string): string {
+    const trimmed = content.trim();
+    if (trimmed.startsWith('```') && trimmed.endsWith('```')) {
+        // Remove first and last line
+        const lines = trimmed.split('\n');
+        if (lines.length > 2) {
+            return lines.slice(1, -1).join('\n').trim();
+        }
+    }
+    return content;
 }
 
 /**
